@@ -32,7 +32,7 @@ const BaseTheme = ({ children }) => {
   }, [mode])
 
   return (
-    <ThemeContext.Provider value={{ toggleMode }}>
+    <ThemeContext.Provider value={{ toggleMode, mode }}>
       <ThemeProvider theme={theme}>{children}</ThemeProvider>
     </ThemeContext.Provider>
   )

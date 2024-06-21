@@ -1,18 +1,11 @@
-import { Container, Typography } from "@mui/material"
+import { useState } from "react"
+import HomePage from "./Pages/HomePage"
+import LoginPage from "./Pages/LoginPage"
 
 function App() {
-  return (
-    <Container
-      disableGutters
-      maxWidth={false}
-      sx={{
-        height: "100svh",
-        overflow: "hidden",
-      }}
-    >
-      <Typography variant="h3">Chat App</Typography>
-    </Container>
-  )
+  const [user, setUser] = useState(false)
+
+  return user ? <HomePage /> : <LoginPage />
 }
 
 export default App
