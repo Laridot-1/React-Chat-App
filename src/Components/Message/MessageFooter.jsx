@@ -177,7 +177,7 @@ const MessageFooter = ({
         alignItems="center"
         gap={1}
         py={1.5}
-        px={1}
+        px={1.2}
         borderTop={`1px solid ${
           mode === "dark" ? colors.grey[800] : colors.grey[300]
         }`}
@@ -186,7 +186,7 @@ const MessageFooter = ({
           disableTouchRipple
           sx={{
             p: { xs: 0.35, sm: 1 },
-            "& svg": { fontSize: { xs: "1.2rem", sm: "1.5rem" } },
+            "& svg": { fontSize: { xs: "1.5rem" } },
           }}
           onClick={() => fileRef.current?.click()}
         >
@@ -204,7 +204,7 @@ const MessageFooter = ({
             disableTouchRipple
             sx={{
               p: { xs: 0.35, sm: 1 },
-              "& svg": { fontSize: { xs: "1.2rem", sm: "1.5rem" } },
+              "& svg": { fontSize: { xs: "1.5rem" } },
             }}
             onClick={() => setOpen(!open)}
           >
@@ -243,7 +243,7 @@ const MessageFooter = ({
             sx={{
               flexShrink: 0,
               p: { xs: 0.35, sm: 1 },
-              "& svg": { fontSize: { xs: "1.1rem", sm: "1.5rem" } },
+              "& svg": { fontSize: { xs: "1.5rem" } },
             }}
             onClick={handleSendMessage}
             disabled={isSendingMessage || isUpdatingMessage}
