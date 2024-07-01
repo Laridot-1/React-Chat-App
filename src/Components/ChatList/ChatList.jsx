@@ -14,7 +14,7 @@ import { db } from "../../firebase"
 import Error from "../Error/Error"
 
 const ChatList = ({ setIsMessageOpen, isOpeningChat, setIsOpeningChat }) => {
-  const { user, setChatList, filter, setFilter } = useAppContext()
+  const { user, chat, setChatList, filter, setFilter } = useAppContext()
   const [err, setErr] = useState("")
   const [isLoadingChat, setIsLoadingChat] = useState(true)
 
@@ -72,7 +72,7 @@ const ChatList = ({ setIsMessageOpen, isOpeningChat, setIsOpeningChat }) => {
       }
     }
     getChats()
-  }, [user])
+  }, [user, chat])
 
   if (!user) {
     return (

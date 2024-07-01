@@ -13,12 +13,7 @@ import {
   updateDoc,
 } from "firebase/firestore"
 import { db, storage } from "../../firebase"
-import {
-  getDownloadURL,
-  ref,
-  uploadBytes,
-  uploadString,
-} from "firebase/storage"
+import { getDownloadURL, ref, uploadString } from "firebase/storage"
 
 const MessageFooter = ({
   editId,
