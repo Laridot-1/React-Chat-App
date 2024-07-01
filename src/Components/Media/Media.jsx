@@ -1,10 +1,16 @@
 import { ArrowBack } from "@mui/icons-material"
 import { Box, IconButton, Stack, Typography, colors } from "@mui/material"
 import { useThemeContext } from "../../BaseTheme"
+import { useAppContext } from "../../Context"
 import Image from "./Image"
+import { useEffect, useState } from "react"
 
 const Media = ({ setIsMediaOpen }) => {
   const { mode } = useThemeContext()
+  const { chat, messages } = useAppContext()
+  const [media] = useState(() =>
+    messages.filter((message) => message.messageType === "image")
+  )
 
   return (
     <Stack flex={1}>
@@ -18,11 +24,11 @@ const Media = ({ setIsMediaOpen }) => {
           mode === "dark" ? colors.grey[800] : colors.grey[300]
         }`}
       >
-        <IconButton onClick={() => setIsMediaOpen(false)}>
+        <IconButton disableTouchRipple onClick={() => setIsMediaOpen(false)}>
           <ArrowBack />
         </IconButton>
-        <Typography fontSize="0.825rem" fontWeight={600}>
-          username
+        <Typography fontSize="0.9rem" fontWeight={550}>
+          {chat?.username}
         </Typography>
       </Box>
       <Box
@@ -32,14 +38,13 @@ const Media = ({ setIsMediaOpen }) => {
           overflowY: "auto",
           display: "grid",
           gap: 1,
-          gridTemplateColumns: "repeat(auto-fill, 60px)",
+          height: "100%",
+          gridTemplateColumns: "repeat(auto-fill, 5rem)",
         }}
       >
-        {Array(7)
-          .fill(" ")
-          .map((_, i) => {
-            return <Image i={i} key={i} />
-          })}
+        {media.map((message) => {
+          return <Image key={message.messageId} image={message.message} />
+        })}
       </Box>
     </Stack>
   )

@@ -8,6 +8,7 @@ import {
   Box,
   Button,
   IconButton,
+  LinearProgress,
   Link,
   Menu,
   MenuItem,
@@ -20,21 +21,46 @@ import {
 } from "@mui/material"
 import { useThemeContext } from "../../BaseTheme"
 import SearchBar from "./SearchBar"
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import { useAppContext } from "../../Context"
+import Error from "../Error/Error"
+import { signOut } from "firebase/auth"
+import { auth, db, storage } from "../../firebase"
+import {
+  collection,
+  doc,
+  getDocs,
+  query,
+  updateDoc,
+  where,
+} from "firebase/firestore"
+import { getDownloadURL, ref, uploadString } from "firebase/storage"
 
 const Header = () => {
-  const { data, setList } = useAppContext()
+  const { user, setUser, setFilter } = useAppContext()
   const { toggleMode, mode } = useThemeContext()
   const isMd = useMediaQuery("(min-width: 900px)")
   const [isSearching, setIsSearching] = useState(false)
   const [anchorEl, setAnchorEl] = useState(null)
   const open = Boolean(anchorEl)
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
+  const [err, setErr] = useState("")
+  const [isLoggingOut, setIsLoggingOut] = useState(false)
 
-  const handleBack = () => {
-    setIsSearching(false)
-    setList(data)
+  const handleLogout = async () => {
+    if (isLoggingOut) return
+    if (!user) return
+
+    setIsLoggingOut(true)
+    setFilter([])
+
+    try {
+      await signOut(auth)
+      localStorage.removeItem("user")
+      setUser(null)
+    } catch (err) {
+      setErr(err.code)
+    }
   }
 
   return (
@@ -51,7 +77,7 @@ const Header = () => {
       }`}
     >
       {isSearching && !isMd ? (
-        <SearchBar handleBack={handleBack} />
+        <SearchBar handleBack={setIsSearching} />
       ) : (
         <>
           <Typography variant="h6" letterSpacing={1.5} fontWeight="bold">
@@ -67,10 +93,11 @@ const Header = () => {
             <SearchBar />
           </Box>
           <Stack direction="row" alignItems="center">
-            <IconButton onClick={toggleMode}>
+            <IconButton onClick={toggleMode} disableTouchRipple>
               {mode === "dark" ? <LightModeOutlined /> : <DarkModeOutlined />}
             </IconButton>
             <IconButton
+              disableTouchRipple
               sx={{ display: { md: "none" } }}
               onClick={() => setIsSearching(true)}
             >
@@ -82,31 +109,36 @@ const Header = () => {
                 width: "35px",
                 height: "35px",
                 cursor: "pointer",
-                bgcolor: "#00887A",
                 "&.MuiAvatar-root": {
                   fontSize: "1rem",
                 },
               }}
+              src={user?.photoUrl}
               onClick={(e) => setAnchorEl(e.currentTarget)}
-            >
-              B
-            </Avatar>
+            />
 
             <Menu
               open={open}
               anchorEl={anchorEl}
               onClose={() => setAnchorEl(null)}
             >
-              <MenuItem onClick={() => setIsEditModalOpen(true)}>
+              <MenuItem
+                onClick={() => {
+                  setIsEditModalOpen(true)
+                  setAnchorEl(null)
+                }}
+              >
                 Edit Profile
               </MenuItem>
-              <MenuItem>Logout</MenuItem>
+              <MenuItem onClick={handleLogout}>Logout</MenuItem>
             </Menu>
 
             <EditProfileModal
               open={isEditModalOpen}
               setOpen={setIsEditModalOpen}
             />
+
+            <Error err={err} setErr={setErr} />
           </Stack>
         </>
       )}
@@ -117,6 +149,118 @@ const Header = () => {
 export default Header
 
 function EditProfileModal({ open, setOpen }) {
+  const { user, setUser } = useAppContext()
+  const [err, setErr] = useState("")
+  const [isUpdating, setIsUpdating] = useState(false)
+  const [userInfo, setUserInfo] = useState({
+    photoUrl: "",
+    displayName: "",
+    username: "",
+  })
+  const fileRef = useRef(null)
+
+  const reg = {
+    displayName: /^[A-Za-z]+ [A-Za-z]+$/,
+    username: /^[a-z]+[0-9]*$/,
+  }
+
+  const changePhoto = () => {
+    fileRef.current.click()
+  }
+
+  const handleFilePicker = (e) => {
+    let file = e.target.files[0]
+    let maxFileSize = 2 * 1024 * 1024
+
+    if (file && file.type.startsWith("image/")) {
+      if (file.size > maxFileSize) {
+        setErr("File must be less than 2mb")
+        return
+      }
+
+      let reader = new FileReader()
+      reader.onload = (e) =>
+        setUserInfo({ ...userInfo, photoUrl: e.target.result })
+      reader.readAsDataURL(file)
+    }
+  }
+
+  const handleChange = (e) => {
+    setUserInfo({ ...userInfo, [e.target.name]: e.target.value })
+  }
+
+  const handleEdit = async () => {
+    if (isUpdating) return
+
+    if (userInfo.displayName.trim() === "" || userInfo.username.trim() === "") {
+      setErr("Please fill all fields.")
+      return
+    } else if (
+      userInfo.displayName === user.displayName &&
+      userInfo.username === user.username &&
+      userInfo.photoUrl === user.photoUrl
+    ) {
+      return
+    } else if (!reg.displayName.test(userInfo.displayName)) {
+      setErr(
+        "Only alphabetic characters separated by a single space are allowed as display nanes."
+      )
+      return
+    } else if (!reg.username.test(userInfo.username)) {
+      setErr(
+        "Only lowercase letters and optional numbers at the end are allowd as usernames."
+      )
+      return
+    }
+
+    setIsUpdating(true)
+
+    if (userInfo.username !== user.username) {
+      let q = query(
+        collection(db, "users"),
+        where("username", "==", userInfo.username)
+      )
+      let querySnapshot = await getDocs(q)
+      if (!querySnapshot.empty) {
+        setIsUpdating(false)
+        setErr("Username already exist")
+        return
+      }
+    }
+
+    let url = ""
+
+    try {
+      if (userInfo.photoUrl !== user.photoUrl && userInfo.photoUrl) {
+        await uploadString(
+          ref(storage, `profilePics/${user.uid}`),
+          userInfo.photoUrl,
+          "data_url"
+        )
+        url = await getDownloadURL(ref(storage, `profilePics/${user.uid}`))
+      }
+
+      const updatedProfile = {
+        ...user,
+        displayName: userInfo.displayName,
+        username: userInfo.username,
+        photoUrl: url,
+      }
+      await updateDoc(doc(db, "users", user.uid), updatedProfile)
+
+      setUser({
+        ...user,
+        displayName: user.displayName,
+        username: user.username,
+        photoUrl: url,
+      })
+    } catch (err) {
+      setErr(err.code)
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
   const modalStyle = {
     position: "absolute",
     top: "20%",
@@ -131,29 +275,83 @@ function EditProfileModal({ open, setOpen }) {
     pb: 4,
   }
 
+  useEffect(() => {
+    if (user) {
+      setUserInfo({
+        username: "" || user.username,
+        photoUrl: "" || user.photoUrl,
+        displayName: "" || user.displayName,
+      })
+    }
+  }, [user, open])
+
   return (
-    <Modal open={open} onClose={() => setOpen(false)}>
-      <Stack sx={modalStyle} gap={2}>
-        <Stack direction="row" alignItems="center" gap={1.5}>
-          <Avatar sx={{ width: 90, height: 90 }} />
-          <Button variant="contained">Change Photo</Button>
+    <>
+      <Modal open={open} onClose={() => setOpen(false)}>
+        <Stack sx={modalStyle} gap={2}>
+          {isUpdating && (
+            <Box width="100%" position="absolute" top={0} left={0}>
+              <LinearProgress />
+            </Box>
+          )}
+          <Stack direction="row" alignItems="center" gap={1.5}>
+            <Avatar sx={{ width: 90, height: 90 }} src={userInfo.photoUrl} />
+            <Button
+              variant="contained"
+              onClick={changePhoto}
+              disabled={isUpdating}
+            >
+              Change Photo
+            </Button>
+            <input
+              type="file"
+              hidden
+              ref={fileRef}
+              onChange={handleFilePicker}
+              accept="image/*"
+            />
+          </Stack>
+          <Stack gap={2.5}>
+            <TextField
+              size="small"
+              label={userInfo.displayName ? "" : "Display Name"}
+              name="displayName"
+              value={userInfo.displayName}
+              onChange={handleChange}
+            />
+            <TextField
+              size="small"
+              label={userInfo.username ? "" : "Username"}
+              name="username"
+              value={userInfo.username}
+              onChange={handleChange}
+            />
+          </Stack>
+          <Stack direction="row" gap={1} justifyContent="center">
+            <Button
+              variant="contained"
+              color="error"
+              disableTouchRipple
+              onClick={() => {
+                setUserInfo({ username: "", displayName: "", photoUrl: "" })
+                setOpen(false)
+              }}
+              disabled={isUpdating}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              disableTouchRipple
+              onClick={handleEdit}
+              disabled={isUpdating}
+            >
+              Edit
+            </Button>
+          </Stack>
         </Stack>
-        <Stack gap={1}>
-          <TextField size="small" value="firstName" />
-          <TextField size="small" value="lastName" />
-          <TextField size="small" value="username" />
-        </Stack>
-        <Stack direction="row" gap={1} justifyContent="center">
-          <Button
-            variant="contained"
-            color="error"
-            onClick={() => setOpen(false)}
-          >
-            Cancel
-          </Button>
-          <Button variant="contained">Edit</Button>
-        </Stack>
-      </Stack>
-    </Modal>
+      </Modal>
+      <Error err={err} setErr={setErr} />
+    </>
   )
 }

@@ -1,4 +1,4 @@
-import { ArrowBack, MoreVertRounded } from "@mui/icons-material"
+import { ArrowBack, Delete, MoreVertRounded } from "@mui/icons-material"
 import {
   Avatar,
   Box,
@@ -7,7 +7,6 @@ import {
   DialogActions,
   DialogContent,
   DialogContentText,
-  DialogTitle,
   Divider,
   IconButton,
   Menu,
@@ -17,61 +16,144 @@ import {
   colors,
 } from "@mui/material"
 import { useThemeContext } from "../../BaseTheme"
-import { useState } from "react"
+import { useEffect, useState } from "react"
+import { useAppContext } from "../../Context"
+import { arrayUnion, deleteDoc, doc, updateDoc } from "firebase/firestore"
+import { db, storage } from "../../firebase"
+import Error from "../Error/Error"
+import { deleteObject, ref } from "firebase/storage"
 
-const MessageHeader = ({ close, setIsMediaOpen }) => {
+const MessageHeader = ({
+  setIsMediaOpen,
+  selected,
+  setIsChecked,
+  setSelected,
+  isChecked,
+  setIsMessageOpen,
+  isBlocked,
+  setIsBlocked,
+}) => {
   const { mode } = useThemeContext()
+  const { chat, setMessages, messages, user } = useAppContext()
+
   const [anchorEl, setAnchorEl] = useState(null)
-  const open = Boolean(anchorEl)
 
   const [isBlockedialogOpen, setIsBlockedDialogOpen] = useState(false)
-  const [isDeleteChatsDialogOpen, setIsDeleteChatsDialogOpen] = useState(false)
+  const [isDeleteMessagesDialogOpen, setIsDeleteMessagesDialogOpen] =
+    useState(false)
 
   return (
     <Stack
       direction="row"
-      gap={2}
+      gap={{ xs: 1, sm: 2 }}
       px={1}
       py={1}
       borderBottom={`1px solid ${
         mode === "dark" ? colors.grey[800] : colors.grey[300]
       }`}
       justifyContent="space-between"
+      alignItems="center"
     >
       <Box display="flex" alignItems="center" gap={1}>
-        <IconButton onClick={() => close(false)}>
+        <IconButton
+          disableTouchRipple
+          sx={{
+            p: { xs: 0.35, sm: 1 },
+            "& svg": { fontSize: { xs: "1.2rem", sm: "1.5rem" } },
+          }}
+          onClick={() => {
+            setIsMessageOpen(false)
+            setMessages([])
+          }}
+        >
           <ArrowBack />
         </IconButton>
         <Box display="flex" alignItems="center" gap={1}>
-          <Avatar>L</Avatar>
+          <Avatar
+            sx={{
+              width: { xs: 30, sm: 40 },
+              height: { xs: 30, sm: 40 },
+              fontSize: { xs: 15, sm: 20 },
+            }}
+            src={chat?.photoUrl}
+          />
           <Typography variant="body2" fontWeight="600" fontSize="0.825rem">
-            username
+            {chat?.username}
           </Typography>
         </Box>
       </Box>
-      <IconButton onClick={(e) => setAnchorEl(e.currentTarget)}>
-        <MoreVertRounded />
-      </IconButton>
+      <Box>
+        {isChecked && (
+          <Button
+            size="small"
+            sx={{
+              textTransform: "capitalize",
+              minWidth: 0,
+              padding: { xs: "3px 4px", sm: "4px 5px" },
+            }}
+            disableTouchRipple
+            onClick={() => {
+              setIsChecked(false)
+              setSelected([])
+            }}
+          >
+            cancel
+          </Button>
+        )}
+        {selected.length > 0 && (
+          <IconButton
+            disableTouchRipple
+            sx={{
+              p: { xs: 0.35, sm: 1 },
+              "& svg": { fontSize: { xs: "1.2rem", sm: "1.5rem" } },
+            }}
+            onClick={() => setIsDeleteMessagesDialogOpen(true)}
+          >
+            <Delete />
+          </IconButton>
+        )}
+        <IconButton
+          disableTouchRipple
+          sx={{
+            p: { xs: 0.35, sm: 1 },
+            "& svg": { fontSize: { xs: "1.2rem", sm: "1.5rem" } },
+          }}
+          onClick={(e) => setAnchorEl(e.currentTarget)}
+        >
+          <MoreVertRounded />
+        </IconButton>
+      </Box>
 
-      <Menu open={open} anchorEl={anchorEl} onClose={() => setAnchorEl(null)}>
+      <Menu
+        open={Boolean(anchorEl)}
+        anchorEl={anchorEl}
+        onClose={() => setAnchorEl(null)}
+      >
         <MenuItem onClick={() => setIsMediaOpen(true)}>Media</MenuItem>
         <Divider />
-        <MenuItem onClick={() => setIsBlockedDialogOpen(true)}>
-          Block User
-        </MenuItem>
-        <MenuItem onClick={() => setIsDeleteChatsDialogOpen(true)}>
-          Clear chat
-        </MenuItem>
+        {isBlocked ? (
+          <MenuItem>Blocked</MenuItem>
+        ) : (
+          <MenuItem onClick={() => setIsBlockedDialogOpen(true)}>
+            Block User
+          </MenuItem>
+        )}
       </Menu>
 
       <BlockUserDialog
+        setIsBlocked={setIsBlocked}
         open={isBlockedialogOpen}
         setOpen={setIsBlockedDialogOpen}
       />
 
-      <ClearChatDialog
-        open={isDeleteChatsDialogOpen}
-        setOpen={setIsDeleteChatsDialogOpen}
+      <DeleteMessagesDialog
+        selected={selected}
+        setSelected={setSelected}
+        setIsChecked={setIsChecked}
+        chat={chat}
+        messages={messages}
+        open={isDeleteMessagesDialogOpen}
+        setOpen={setIsDeleteMessagesDialogOpen}
       />
     </Stack>
   )
@@ -79,35 +161,124 @@ const MessageHeader = ({ close, setIsMediaOpen }) => {
 
 export default MessageHeader
 
-function BlockUserDialog({ open, setOpen }) {
+function BlockUserDialog({ open, setOpen, setIsBlocked }) {
+  const { user, setUser, chat } = useAppContext()
+  const [err, setErr] = useState("")
+  const [isBlocking, setIsBlocking] = useState(false)
+
+  const handleBlock = async () => {
+    if (isBlocking) return
+
+    setIsBlocking(true)
+
+    try {
+      await updateDoc(doc(db, "users", user.uid), {
+        blockedUsers: arrayUnion(chat.senderId),
+      })
+      setUser({ ...user, blockedUsers: [...user.blockedUsers, chat.senderId] })
+      setIsBlocked(true)
+      setOpen(false)
+    } catch (err) {
+      setErr(err.code)
+    } finally {
+      setIsBlocking(false)
+    }
+  }
+
   return (
-    <Dialog open={open} onClose={() => setOpen(false)}>
-      <DialogContent>
-        <DialogContentText>
-          Are you sure you want to block this user?
-        </DialogContentText>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setOpen(false)}>Cancel</Button>
-        <Button onClick={() => setOpen(false)}>Confirm</Button>
-      </DialogActions>
-    </Dialog>
+    <>
+      <Dialog open={open} onClose={() => setOpen(false)}>
+        <DialogContent>
+          <DialogContentText>
+            Are you sure you want to block this user?
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setOpen(false)}>Cancel</Button>
+          <Button onClick={handleBlock} disabled={isBlocking}>
+            Confirm
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Error err={err} setErr={setErr} />
+    </>
   )
 }
 
-function ClearChatDialog({ open, setOpen }) {
+function DeleteMessagesDialog({
+  open,
+  setOpen,
+  selected,
+  chat,
+  setSelected,
+  setIsChecked,
+  messages,
+}) {
+  const [isDeletingMessages, setIsDeletingMessages] = useState(false)
+  const [err, setErr] = useState("")
+
+  const handleDeleteMessages = async () => {
+    if (isDeletingMessages) return
+
+    setIsDeletingMessages(true)
+
+    try {
+      const deletedMessages = selected.map((message) => {
+        return deleteDoc(
+          doc(db, "chatList", chat.docId, "messages", message.messageId)
+        )
+      })
+      Promise.all(deletedMessages)
+
+      const imagesToDelete = selected.filter(
+        (message) => message.messageType === "image"
+      )
+
+      const deletedImages = imagesToDelete.map((message) => {
+        return deleteObject(ref(storage, `messages/${message.messageId}`))
+      })
+      Promise.all(deletedImages)
+
+      setSelected([])
+      setIsChecked(false)
+
+      const lastMessage = messages[messages.length - 2]
+      await updateDoc(doc(db, "chatList", chat.docId), {
+        lastMessage: lastMessage?.message || "",
+        senderId: lastMessage?.senderId || "",
+        time: lastMessage?.time || "",
+        isSeen: true,
+        messageType: lastMessage?.messageType || "text",
+      })
+
+      setOpen(false)
+    } catch (err) {
+      setErr(err.code)
+    } finally {
+      setIsDeletingMessages(false)
+    }
+  }
+
   return (
-    <Dialog open={open} onClose={() => setOpen(false)}>
-      <DialogTitle>Delete Chat?</DialogTitle>
-      <DialogContent>
-        <DialogContentText>
-          Deleting chats won't delete the chat on the other user's device.
-        </DialogContentText>
-      </DialogContent>
-      <DialogActions>
-        <Button onClick={() => setOpen(false)}>Cancel</Button>
-        <Button onClick={() => setOpen(false)}>Clear</Button>
-      </DialogActions>
-    </Dialog>
+    <>
+      <Dialog open={open} onClose={() => setOpen(false)}>
+        <DialogContent>
+          <DialogContentText>
+            {selected.length > 1
+              ? "Are you sure you want to delete these messages"
+              : "Are you sure you want to delete this message"}
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button disabled={isDeletingMessages} onClick={() => setOpen(false)}>
+            Cancel
+          </Button>
+          <Button disabled={isDeletingMessages} onClick={handleDeleteMessages}>
+            Delete
+          </Button>
+        </DialogActions>
+      </Dialog>
+      <Error err={err} setErr={setErr} />
+    </>
   )
 }

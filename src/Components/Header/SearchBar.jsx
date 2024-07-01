@@ -5,19 +5,23 @@ import { useAppContext } from "../../Context"
 
 const SearchBar = ({ handleBack }) => {
   const [val, setVal] = useState("")
-  const { setList, data } = useAppContext()
+  const { chatList, setFilter } = useAppContext()
 
   const handleSearch = (e) => {
     setVal(e.target.value)
-    const newList = data.filter((item) =>
-      item.username.toLowerCase().includes(e.target.value.toLowerCase())
+    const filtered = chatList.filter((chat) =>
+      chat.username.toLowerCase().includes(e.target.value.toLowerCase())
     )
-    setList(newList)
+    setFilter(filtered)
   }
 
   return (
     <Box display="flex" alignItems="center" gap={2} flex={1}>
-      <IconButton sx={{ display: { md: "none" } }} onClick={handleBack}>
+      <IconButton
+        disableTouchRipple
+        sx={{ display: { md: "none" } }}
+        onClick={() => handleBack(false)}
+      >
         <ArrowBack />
       </IconButton>
       <TextField
