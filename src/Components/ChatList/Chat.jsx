@@ -64,16 +64,30 @@ const Chat = ({ chat, setIsMessageOpen, isOpeningChat, setIsOpeningChat }) => {
       >
         <Avatar src={chat?.photoUrl} />
         <Stack maxWidth="100%" overflow="hidden">
-          <Typography variant="body1" fontWeight="550" color={colors.grey[800]}>
+          <Typography
+            variant="body1"
+            fontWeight="550"
+            color={mode === "light" ? colors.grey[800] : colors.common.white}
+          >
             {chat?.username}
           </Typography>
           {chat.messageType === "text" ? (
-            <Typography variant="body2" noWrap color={colors.grey[800]}>
+            <Typography
+              variant="body2"
+              noWrap
+              color={mode === "light" ? colors.grey[800] : colors.common.white}
+            >
               {chat?.lastMessage}
             </Typography>
           ) : (
             <Stack direction="row" gap={0.35} alignItems="center">
-              <Image sx={{ fontSize: "1.2rem", color: colors.grey[800] }} />
+              <Image
+                sx={{
+                  fontSize: "1.2rem",
+                  color:
+                    mode === "light" ? colors.grey[800] : colors.common.white,
+                }}
+              />
               <Typography variant="body2">Image</Typography>
             </Stack>
           )}
